@@ -119,6 +119,9 @@ typedef struct _kob_dynarray_header {
   KOB_PASTE(name) &operator=(KOB_PASTE(name) &&) = delete;                     \
   virtual ~KOB_PASTE(name)() = default;
 
+#else
+#define KOB_RULE_OF_FIVE(name)
+
 #endif // __cplusplus
 
 #endif // KOB_HEADER_FILE
