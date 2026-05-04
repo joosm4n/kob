@@ -18,7 +18,10 @@
 #define KOB_PTR_CAST(type, obj) ((type)(&obj))
 #define KOB_BIT_CAST(type, obj) (*(type *)(&obj))
 
-#define KOB_PASTE(x) #x
+#define KOB_PASTE(x, y) KOB_PASTE_IMPL(x, y)
+#define KOB_PASTE_IMPL(x, y) x##y
+#define KOB_STRINGIFY(x) #x
+
 #define KOB_MEMSET memset
 #define KOB_STRLEN strlen
 #define KOB_FREE free
@@ -136,12 +139,12 @@ typedef struct kob_str {
 #ifdef __cplusplus
 
 #define KOB_RULE_OF_FIVE(name)                                                 \
-  KOB_PASTE(name)() = default;                                                 \
-  KOB_PASTE(name)(const KOB_PASTE(name) &) = delete;                           \
-  KOB_PASTE(name)(KOB_PASTE(name) &&) = delete;                                \
-  KOB_PASTE(name) &operator=(const KOB_PASTE(name) &) = delete;                \
-  KOB_PASTE(name) &operator=(KOB_PASTE(name) &&) = delete;                     \
-  virtual ~KOB_PASTE(name)() = default;
+  KOB_PASTE(name, )() = default;                                               \
+  KOB_PASTE(name, )(const KOB_PASTE(name, ) &) = delete;                       \
+  KOB_PASTE(name, )(KOB_PASTE(name, ) &&) = delete;                            \
+  KOB_PASTE(name, ) &operator=(const KOB_PASTE(name, ) &) = delete;            \
+  KOB_PASTE(name, ) &operator=(KOB_PASTE(name, ) &&) = delete;                 \
+  virtual ~KOB_PASTE(name, )() = default;
 
 #else
 #define KOB_RULE_OF_FIVE(name)
