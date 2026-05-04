@@ -69,6 +69,14 @@
     assert((check && msg));                                                    \
   }
 
+#define TODO(msg)                                                              \
+  {                                                                            \
+    KOB_PRINTF("[KOB-TODO] %s:%d: ", __FILE__, __LINE__);                      \
+    KOB_PRINTF(msg, ##__VA_ARGS__);                                            \
+    KOB_PRINTF("\n");                                                          \
+    assert((false && msg));                                                    \
+  }
+
 #define KOB_DA_INIT_CAP 32
 
 #define kob_da_reserve(da, expected_capacity)                                  \
