@@ -16,6 +16,8 @@
 #define KOB_PTR_CAST(type, obj) ((type)(&obj))
 #define KOB_BIT_CAST(type, obj) (*(type *)(&obj))
 
+#define KOB_PASTE(x) #x
+
 #define KOB_COUNTOF(x) (sizeof(x) / sizeof(x[0]))
 
 #define KOB_FOREACH(_item_, _array_)                                           \
@@ -110,12 +112,12 @@ typedef struct _kob_dynarray_header {
 #ifdef __cplusplus
 
 #define KOB_RULE_OF_FIVE(name)                                                 \
-  #name() = default;                                                           \
-  #name(const #name &) = delete;                                               \
-  #name(#name &&) = delete;                                                    \
-  #name &operator=(const #name &) = delete;                                    \
-  #name &operator=(#name &&) = delete;                                         \
-  virtual ~#name() = default;
+  KOB_PASTE(name)() = default;                                                 \
+  KOB_PASTE(name)(const KOB_PASTE(name) &) = delete;                           \
+  KOB_PASTE(name)(KOB_PASTE(name) &&) = delete;                                \
+  KOB_PASTE(name) &operator=(const KOB_PASTE(name) &) = delete;                \
+  KOB_PASTE(name) &operator=(KOB_PASTE(name) &&) = delete;                     \
+  virtual ~KOB_PASTE(name)() = default;
 
 #endif // __cplusplus
 
