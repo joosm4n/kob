@@ -147,27 +147,27 @@ typedef struct kob_str {
 #ifdef __cplusplus
 
 #define KOB_RULE_OF_FIVE(name)                                                 \
-  KOB_PASTE(name, )() = default;                                               \
-  KOB_PASTE(name, )(const KOB_PASTE(name, ) &) = delete;                       \
-  KOB_PASTE(name, )(KOB_PASTE(name, ) &&) = delete;                            \
+  KOB_PASTE(name, )()                                     = default;           \
+  KOB_PASTE(name, )(const KOB_PASTE(name, ) &)            = delete;            \
+  KOB_PASTE(name, )(KOB_PASTE(name, ) &&)                 = delete;            \
   KOB_PASTE(name, ) &operator=(const KOB_PASTE(name, ) &) = delete;            \
-  KOB_PASTE(name, ) &operator=(KOB_PASTE(name, ) &&) = delete;                 \
-  virtual ~KOB_PASTE(name, )() = default;
+  KOB_PASTE(name, ) &operator=(KOB_PASTE(name, ) &&)      = delete;            \
+  virtual ~KOB_PASTE(name, )()                            = default;
 
 #else
 #define KOB_RULE_OF_FIVE(name)
 
-#endif // __cplusplus
+#endif /* __cplusplus */
 
 #ifdef KOB_IMPL
 
-//
-// String
-// vv
+/* */
+/* String */
+/* vv */
 KOBDEF kob_String String_from(const char *c_str) {
-  kob_String s = {};
+  kob_String s      = {};
   kob_String *s_ref = &s;
-  size_t len = KOB_STRLEN(c_str);
+  size_t len        = KOB_STRLEN(c_str);
   kob_da_push_many(s_ref, c_str, len);
   if (kob_da_last(s_ref) != '\0') {
     kob_da_push(s_ref, '\0');
@@ -177,12 +177,14 @@ KOBDEF kob_String String_from(const char *c_str) {
 
 KOBDEF void String_destroy(kob_String *s) {
   KOB_FREE(s->items);
-  s->items = NULL;
+  s->items    = NULL;
   s->capacity = 0;
-  s->count = 0;
+  s->count    = 0;
 }
 
-KOBDEF void String_push(kob_String *s, char c) { kob_da_push(s, c); }
+KOBDEF void String_push(kob_String *s, char c) {
+  kob_da_push(s, c);
+}
 
 KOBDEF void String_push_str(kob_String *s, const char *c_str) {
   size_t len = KOB_STRLEN(c_str);
@@ -195,7 +197,7 @@ KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
     return err1;
   }
 
-  size_t len = String_len(s);
+  size_t len                          = String_len(s);
   const char *const *const target_ptr = (const char *const *const)&(s->items);
 
   if (begin >= (int)len) {
@@ -207,7 +209,7 @@ KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
 
   if (end < 0) {
     int idx = len - abs(end);
-    end = idx < 0 ? 0 : idx;
+    end     = idx < 0 ? 0 : idx;
   } else if (end >= (int)len) {
     end = len;
   }
@@ -216,28 +218,30 @@ KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
   return last;
 }
 
-//
-// str
-// vv
+/* */
+/* str */
+/* vv */
 KOBDEF kob_str str_slice(const kob_str s, int begin, int end) {
-  int shifted_begin = ((int)s.start) + begin;
-  int shifted_end = ((int)s.start) + end;
+  int shifted_begin   = ((int)s.start) + begin;
+  int shifted_end     = ((int)s.start) + end;
   kob_String *str_obj = (kob_String *)(s.ptr);
   return String_slice(str_obj, shifted_begin, shifted_end);
 }
 
-// KOBDEF uint8_t str_valid_index(const kob_str s, size_t idx) {
-//   return (s.ptr != NULL && idx < s.len);
-// }
-// KOBDEF char str_at(const kob_str s, size_t idx) {
-//   if (!str_valid_index(s, idx)) {
-//     return '\0';
-//   } else {
-//     char c = (*(s.ptr))[idx];
-//     return c;
-//   }
-// }
+/*
+KOBDEF uint8_t str_valid_index(const kob_str s, size_t idx) {
+   return (s.ptr != NULL && idx < s.len);
+}
+ KOBDEF char str_at(const kob_str s, size_t idx) {
+   if (!str_valid_index(s, idx)) {
+     return '\0';
+   } else {
+     char c = (*(s.ptr))[idx];
+     return c;
+   }
+} ``
+*/
 
-#endif // KOB_IMPL
+#endif /* KOB_IMPL */
 
-#endif // KOB_HEADER_FILE
+#endif /* KOB_HEADER_FILE */
