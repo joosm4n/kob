@@ -1,13 +1,35 @@
 #ifndef KOB_HEADER_FILE
 #define KOB_HEADER_FILE
 
-#define KOB_IMPL
+/*
+ *  Flags:
+ *  - KOB_IMPL: Define ONCE in your main .c/.cpp file.
+ *  - KOB_HEAP: A stack based heap for primarily embedded systems.
+ *  - KOB_NO_CORE: Sets the default usage flags to false so you can enable only
+ * the ones you want.
+ *  - KOB_NO_STD: Sets usage of cstdlib/libc to false
+ *  - KOB_TYPEDEFS: Turns on custom typedefs, mainly for non cstd programming
+ */
 
+/* ----- */
+/* Don't commit, just so I can see the IMPL PART when testing */
+/*
+#define KOB_IMPL
+#define KOB_HEAP
+#define KOB_TYPEDEFS
+#define KOB_NO_STD
+#undef __cplusplus
+*/
+/* Don't commit, just so I can see the IMPL PART when testing */
+/* ----- */
+
+#ifndef KOB_NO_STD
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#endif /* KOB_NO_STD */
 
 #ifdef __cplusplus
 #define KOB_DECLTYPE_CAST(T) (decltype(T))
@@ -15,6 +37,7 @@
 #define KOB_DECLTYPE_CAST(T)
 #endif
 
+#define KOBDEF
 #define KOB_PTR_CAST(type, obj) ((type)(&obj))
 #define KOB_BIT_CAST(type, obj) (*(type *)(&obj))
 
@@ -22,59 +45,157 @@
 #define KOB_PASTE_IMPL(x, y) x##y
 #define KOB_STRINGIFY(x) #x
 
-#define KOB_MEMSET memset
-#define KOB_STRLEN strlen
-#define KOB_FREE free
-#define KOB_MALLOC malloc
-#define KOB_CALLOC calloc
-#define KOB_REALLOC realloc
+#define KOB_STATIC_ASSERT(x, msg)                                              \
+  int KOB_STATIC_ASSERT(int KOB_STATIC_ASSERT[(x) ? 1 : -1])
+
+#ifdef KOB_TYPEDEFS
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned int uint32_t;
+typedef unsigned long long uint64_t;
+typedef unsigned long long size_t;
+#ifndef __cplusplus
+typedef _Bool bool;
+#define false (0)
+#define true (1)
+#endif
+
+#endif /* KOB_TYPEDEFS */
+
+KOB_STATIC_ASSERT(sizeof(uint8_t) == 1, "Incorrect assumed size");
+KOB_STATIC_ASSERT(sizeof(uint16_t) == 2, "Incorrect assumed size");
+KOB_STATIC_ASSERT(sizeof(uint32_t) == 4, "Incorrect assumed size");
+KOB_STATIC_ASSERT(sizeof(uint64_t) == 8, "Incorrect assumed size");
+KOB_STATIC_ASSERT(sizeof(size_t) == 8, "Incorrect assumed size");
+
+#ifdef KOB_HEAP
+
+#define KOB_DEFAULT_MAX_STACK_SIZE                                             \
+  (1 * 1000 * 8192) /* 1 byte => 1KB => 8MiB                                   \
+                     */
+#define KOB_HEAP_CHUNK_SIZE (128ul)
+#define KOB_HEAP_NUM_CHUNKS (10ul)
+#define KOB_HEAP_SIZE (KOB_HEAP_CHUNK_SIZE)
+KOB_STATIC_ASSERT(KOB_HEAP_SIZE < KOB_DEFAULT_MAX_STACK_SIZE,
+                  "Reassess what your doing");
+
+typedef struct kob_HeapChunkHeader {
+  /* Incremental ID */
+  uint id;
+
+  /* Size is not including size of header */
+  /* This is up to change if it makes things easier */
+  uint size;
+} kob_HeapChunkHeader;
+KOB_STATIC_ASSERT(sizeof(kob_HeapChunkHeader) == (8),
+                  "Unexpected size of header");
+
+typedef struct kob_HeapChunk {
+  uint8_t data[KOB_HEAP_CHUNK_SIZE];
+} kob_HeapChunk;
+
+KOBDEF void kob_free_HEAP(void *ptr);
+KOBDEF void *kob_malloc_HEAP(size_t size);
+KOBDEF void *kob_calloc_HEAP(size_t n, size_t size);
+KOBDEF void *kob_realloc_HEAP(void *ptr, size_t size);
+KOBDEF const kob_HeapChunkHeader *
+kob_next_heap_header(const kob_HeapChunkHeader *header);
+
+KOBDEF void print_chunk(const kob_HeapChunkHeader *header);
+KOBDEF void print_heap();
+KOBDEF void print_heap_in_chunks();
+KOBDEF void print_addr(uint);
+
+#endif /* KOB_HEAP */
 
 #define KOB_COUNTOF(x) ((size_t)(sizeof(x) / sizeof(x[0])))
 #define KOB_ZERO(x) (KOB_MEMSET(x, 0, KOB_COUNTOF(x)))
 
-#define KOBDEF inline static
+#ifndef KOB_NO_STD
+#define kob_memset memset
+#define kob_strlen strlen
+#define kob_memcpy memcpy
+#define kob_printf(...) printf(__VA_ARGS__)
+#define kob_abs abs
+#define kob_assert(check, msg) assert((check && msg))
+#define kob_abort(...) abort(__VA_ARGS__)
+#else
+#define NULL 0
+#define kob_memset kob_memset_NOSTD
+#define kob_memcpy kob_memcpy_NOSTD
+#define kob_strlen kob_strlen_NOSTD
+#define kob_printf(...) kob_printf_NOSTD(__VA_ARGS__)
+#define kob_abs kob_abs_NOSTD
+#define kob_assert(check, msg) kob_assert_NOSTD(check, msg)
+#define kob_abort(...)
+
+/* TEMP FIX */
+int kob_printf_NOSTD(const char *format, ...) { return 0; }
+void *kob_memset_NOSTD(void *s, int c, size_t n) { return NULL; }
+size_t kob_strlen_NOSTD(const char *s) { return 0; }
+int kob_abs_NOSTD(int i) { return 0; }
+void *kob_memcpy_NOSTD(void *dest, const void *src, size_t n) { return NULL; }
+void kob_assert_NOSTD(bool expression_result, const char *exprsesion_string) {
+  if (expression_result == false) {
+    kob_printf("Oh no: expression %s failed!\n", exprsesion_string);
+    kob_abort();
+  }
+}
+
+#endif /* KOB_NO_STD */
+
+#ifndef KOB_HEAP
+#define kob_free free
+#define koc_malloc malloc
+#define kob_calloc calloc
+#define kob_realloc realloc
+#else
+#define kob_free kob_free_HEAP
+#define kob_malloc kob_malloc_HEAP
+#define kob_calloc kob_calloc_HEAP
+#define kob_realloc kob_realloc_HEAP
+#endif /* KOB_HEAP */
 
 #define KOB_FOREACH(_item_, _array_)                                           \
   for (size_t i = 0u, _keep_ = 1u; _keep_ && i < KOB_COUNTOF(_array_);         \
        _keep_ = !_keep_, i++)                                                  \
     for (_item_ = _array_[i]; _keep_; _keep_ = !_keep_)
 
-#define KOB_PRINTF printf
 #define KOB_LOG_INFO(fmt, ...)                                                 \
   {                                                                            \
-    KOB_PRINTF("[KOB-INFO]: ");                                                \
-    KOB_PRINTF(fmt, ##__VA_ARGS__);                                            \
-    KOB_PRINTF("\n");                                                          \
+    kob_printf("[KOB-INFO]: ");                                                \
+    kob_printf(fmt, ##__VA_ARGS__);                                            \
+    kob_printf("\n");                                                          \
   }
 
 #define KOB_LOG_ERROR(fmt, ...)                                                \
   {                                                                            \
-    KOB_PRINTF("[KOB-ERROR] : ");                                              \
-    KOB_PRINTF(fmt, ##__VA_ARGS__);                                            \
-    KOB_PRINTF("\n");                                                          \
+    kob_printf("[KOB-ERROR] : ");                                              \
+    kob_printf(fmt, ##__VA_ARGS__);                                            \
+    kob_printf("\n");                                                          \
   }
 
 #define KOB_LOG_ERROR2(fmt, ...)                                               \
   {                                                                            \
-    KOB_PRINTF("[KOB-ERROR] : %s:%d \n          ERROR: ", __FILE__, __LINE__); \
-    KOB_PRINTF(fmt, ##__VA_ARGS__);                                            \
-    KOB_PRINTF("\n");                                                          \
+    kob_printf("[KOB-ERROR] : %s:%d \n          ERROR: ", __FILE__, __LINE__); \
+    kob_printf(fmt, ##__VA_ARGS__);                                            \
+    kob_printf("\n");                                                          \
   }
 
 #define KOB_ASSERT(check, msg, ...)                                            \
   if (!(check)) {                                                              \
-    KOB_PRINTF("[KOB-ASSERT] %s:%d: ", __FILE__, __LINE__);                    \
-    KOB_PRINTF(msg, ##__VA_ARGS__);                                            \
-    KOB_PRINTF("\n");                                                          \
-    assert((check && msg));                                                    \
+    kob_printf("[KOB-ASSERT] %s:%d: ", __FILE__, __LINE__);                    \
+    kob_printf(msg, ##__VA_ARGS__);                                            \
+    kob_printf("\n");                                                          \
+    kob_assert(check, msg);                                                    \
   }
 
 #define TODO(msg)                                                              \
   {                                                                            \
-    KOB_PRINTF("[KOB-TODO] %s:%d: ", __FILE__, __LINE__);                      \
-    KOB_PRINTF(msg, ##__VA_ARGS__);                                            \
-    KOB_PRINTF("\n");                                                          \
-    assert((false && msg));                                                    \
+    kob_printf("[KOB-TODO] %s:%d: ", __FILE__, __LINE__);                      \
+    kob_printf(msg, ##__VA_ARGS__);                                            \
+    kob_printf("\n");                                                          \
+    kob_assert(false, msg);                                                    \
   }
 
 #define KOB_DA_INIT_CAP 32
@@ -89,7 +210,7 @@
         (da)->capacity *= 2;                                                   \
       }                                                                        \
       (da)->items = KOB_DECLTYPE_CAST((da)->items)                             \
-          KOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items));     \
+          kob_realloc((da)->items, (da)->capacity * sizeof(*(da)->items));     \
       KOB_ASSERT((da)->items != NULL, "Buy more RAM lol");                     \
     }                                                                          \
   } while (0)
@@ -103,8 +224,8 @@
 #define kob_da_push_many(da, new_items, new_items_count)                       \
   do {                                                                         \
     kob_da_reserve((da), (da)->count + (new_items_count));                     \
-    memcpy((da)->items + (da)->count, (new_items),                             \
-           (new_items_count) * sizeof(*(da)->items));                          \
+    kob_memcpy((da)->items + (da)->count, (new_items),                         \
+               (new_items_count) * sizeof(*(da)->items));                      \
     (da)->count += (new_items_count);                                          \
   } while (0)
 
@@ -147,12 +268,12 @@ typedef struct kob_str {
 #ifdef __cplusplus
 
 #define KOB_RULE_OF_FIVE(name)                                                 \
-  KOB_PASTE(name, )()                                     = default;           \
-  KOB_PASTE(name, )(const KOB_PASTE(name, ) &)            = delete;            \
-  KOB_PASTE(name, )(KOB_PASTE(name, ) &&)                 = delete;            \
+  KOB_PASTE(name, )() = default;                                               \
+  KOB_PASTE(name, )(const KOB_PASTE(name, ) &) = delete;                       \
+  KOB_PASTE(name, )(KOB_PASTE(name, ) &&) = delete;                            \
   KOB_PASTE(name, ) &operator=(const KOB_PASTE(name, ) &) = delete;            \
-  KOB_PASTE(name, ) &operator=(KOB_PASTE(name, ) &&)      = delete;            \
-  virtual ~KOB_PASTE(name, )()                            = default;
+  KOB_PASTE(name, ) &operator=(KOB_PASTE(name, ) &&) = delete;                 \
+  virtual ~KOB_PASTE(name, )() = default;
 
 #else
 #define KOB_RULE_OF_FIVE(name)
@@ -165,9 +286,9 @@ typedef struct kob_str {
 /* String */
 /* vv */
 KOBDEF kob_String String_from(const char *c_str) {
-  kob_String s      = {};
+  kob_String s = {};
   kob_String *s_ref = &s;
-  size_t len        = KOB_STRLEN(c_str);
+  size_t len = kob_strlen(c_str);
   kob_da_push_many(s_ref, c_str, len);
   if (kob_da_last(s_ref) != '\0') {
     kob_da_push(s_ref, '\0');
@@ -176,18 +297,16 @@ KOBDEF kob_String String_from(const char *c_str) {
 }
 
 KOBDEF void String_destroy(kob_String *s) {
-  KOB_FREE(s->items);
-  s->items    = NULL;
+  kob_free(s->items);
+  s->items = NULL;
   s->capacity = 0;
-  s->count    = 0;
+  s->count = 0;
 }
 
-KOBDEF void String_push(kob_String *s, char c) {
-  kob_da_push(s, c);
-}
+KOBDEF void String_push(kob_String *s, char c) { kob_da_push(s, c); }
 
 KOBDEF void String_push_str(kob_String *s, const char *c_str) {
-  size_t len = KOB_STRLEN(c_str);
+  size_t len = kob_strlen(c_str);
   kob_da_push_many(s, c_str, len);
 }
 
@@ -197,7 +316,7 @@ KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
     return err1;
   }
 
-  size_t len                          = String_len(s);
+  size_t len = String_len(s);
   const char *const *const target_ptr = (const char *const *const)&(s->items);
 
   if (begin >= (int)len) {
@@ -208,8 +327,8 @@ KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
   }
 
   if (end < 0) {
-    int idx = len - abs(end);
-    end     = idx < 0 ? 0 : idx;
+    int idx = len - kob_abs(end);
+    end = idx < 0 ? 0 : idx;
   } else if (end >= (int)len) {
     end = len;
   }
@@ -222,8 +341,8 @@ KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
 /* str */
 /* vv */
 KOBDEF kob_str str_slice(const kob_str s, int begin, int end) {
-  int shifted_begin   = ((int)s.start) + begin;
-  int shifted_end     = ((int)s.start) + end;
+  int shifted_begin = ((int)s.start) + begin;
+  int shifted_end = ((int)s.start) + end;
   kob_String *str_obj = (kob_String *)(s.ptr);
   return String_slice(str_obj, shifted_begin, shifted_end);
 }
@@ -241,6 +360,21 @@ KOBDEF uint8_t str_valid_index(const kob_str s, size_t idx) {
    }
 } ``
 */
+
+#ifdef KOB_HEAP
+void kob_free_HEAP(void *ptr) {}
+void *kob_malloc_HEAP(size_t size) { return NULL; }
+void *kob_calloc_HEAP(size_t n, size_t size) { return NULL; }
+void *kob_realloc_HEAP(void *ptr, size_t size) { return NULL; }
+
+const kob_HeapChunkHeader *
+kob_next_heap_header(const kob_HeapChunkHeader *header) {}
+
+void print_chunk(const kob_HeapChunkHeader *header) {}
+void print_heap() {}
+void print_heap_in_chunks() {}
+void print_addr(uint) {}
+#endif /* KOB_HEAP */
 
 #endif /* KOB_IMPL */
 

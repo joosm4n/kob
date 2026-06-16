@@ -1,11 +1,11 @@
 
 CC := gcc
-C_STD := -std=gnu17
+C_STD := -std=c99
 
 CCXX := g++
 CXX_STD := -std=gnu++17
 
-FLAGS := -ggdb -Wall -Wextra -pedantic -Wno-unused
+FLAGS := -ggdb -Wall -Wextra -Wno-unused-parameter
 BUILD_DIR := ./build
 EXAMPLE := kob_example
 

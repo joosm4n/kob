@@ -1,5 +1,7 @@
 
 #define KOB_IMPL
+#define KOB_NO_STD
+#define KOB_HEAP
 #include "kob.h"
 
 int main() {
@@ -9,9 +11,9 @@ int main() {
   kob_str str = String_slice(&msg, 0, KOB_COUNTOF(base));
   kob_str hello = str_slice(str, 0, 5);
   kob_str world = str_slice(str, 6, -1);
-  printf("%.*s\n", str_print_layout(str));
+  kob_printf("%.*s\n", str_print_layout(str));
 
-  printf("%.*s\n", str_print_layout(hello));
-  printf("%.*s\n", str_print_layout(world));
+  kob_printf("%.*s\n", str_print_layout(hello));
+  kob_printf("%.*s\n", str_print_layout(world));
   return 0;
 }
