@@ -1,6 +1,5 @@
 
 #define KOB_IMPL
-#define KOB_NO_STD
 #define KOB_HEAP
 #include "kob.h"
 
@@ -15,5 +14,9 @@ int main() {
 
   kob_printf("%.*s\n", str_print_layout(hello));
   kob_printf("%.*s\n", str_print_layout(world));
+
+  kob_print_heap_in_chunks();
+  kob_print_heap();
+
   return 0;
 }

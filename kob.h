@@ -13,14 +13,15 @@
 
 /* ----- */
 /* Don't commit, just so I can see the IMPL PART when testing */
-/*
+/*                                                                             \
+ */                                                                            \
 #define KOB_IMPL
-#define KOB_HEAP
-#define KOB_TYPEDEFS
-#define KOB_NO_STD
-#undef __cplusplus
-*/
-/* Don't commit, just so I can see the IMPL PART when testing */
+#define KOB_HEAP /*                                                            \
+ #define KOB_TYPEDEFS                                                          \
+ #define KOB_NO_STD                                                            \
+ #undef __cplusplus                                                            \
+ */
+/* Don't commit, just so I can see the IMPL PART wihen testing */
 /* ----- */
 
 #ifndef KOB_NO_STD
@@ -75,17 +76,17 @@ KOB_STATIC_ASSERT(sizeof(size_t) == 8, "Incorrect assumed size");
                      */
 #define KOB_HEAP_CHUNK_SIZE (128ul)
 #define KOB_HEAP_NUM_CHUNKS (10ul)
-#define KOB_HEAP_SIZE (KOB_HEAP_CHUNK_SIZE)
+#define KOB_HEAP_SIZE (KOB_HEAP_CHUNK_SIZE * KOB_HEAP_NUM_CHUNKS)
 KOB_STATIC_ASSERT(KOB_HEAP_SIZE < KOB_DEFAULT_MAX_STACK_SIZE,
                   "Reassess what your doing");
 
 typedef struct kob_HeapChunkHeader {
   /* Incremental ID */
-  uint id;
+  uint32_t id;
 
   /* Size is not including size of header */
   /* This is up to change if it makes things easier */
-  uint size;
+  uint32_t size;
 } kob_HeapChunkHeader;
 KOB_STATIC_ASSERT(sizeof(kob_HeapChunkHeader) == (8),
                   "Unexpected size of header");
@@ -93,6 +94,14 @@ KOB_STATIC_ASSERT(sizeof(kob_HeapChunkHeader) == (8),
 typedef struct kob_HeapChunk {
   uint8_t data[KOB_HEAP_CHUNK_SIZE];
 } kob_HeapChunk;
+KOB_STATIC_ASSERT(sizeof(kob_HeapChunk) == (KOB_HEAP_CHUNK_SIZE),
+                  "Unexpected size of chunk");
+
+typedef struct kob_HeapChunkMetadata {
+  uint32_t id;
+  uint32_t pos;
+  uint32_t size;
+} kob_HeapChunkMetadata;
 
 KOBDEF void kob_free_HEAP(void *ptr);
 KOBDEF void *kob_malloc_HEAP(size_t size);
@@ -101,10 +110,10 @@ KOBDEF void *kob_realloc_HEAP(void *ptr, size_t size);
 KOBDEF const kob_HeapChunkHeader *
 kob_next_heap_header(const kob_HeapChunkHeader *header);
 
-KOBDEF void print_chunk(const kob_HeapChunkHeader *header);
-KOBDEF void print_heap();
-KOBDEF void print_heap_in_chunks();
-KOBDEF void print_addr(uint);
+KOBDEF void kob_print_chunk(const kob_HeapChunkHeader *header);
+KOBDEF void kob_print_heap();
+KOBDEF void kob_print_heap_in_chunks();
+KOBDEF void kob_print_addr(uint32_t addr);
 
 #endif /* KOB_HEAP */
 
@@ -248,6 +257,11 @@ typedef struct kob_String {
   size_t count;
 } kob_String;
 
+kob_String String_from(const char *c_str);
+void String_destroy(kob_String *s);
+void String_push(kob_String *s, char c);
+kob_str String_slice(const kob_String *s, int begin, int end);
+void String_push_str(kob_String *s, const char *c_str);
 #define String_isvalid(s) ((s) != NULL ? (s)->items != NULL : 0)
 #define String_len(s) ((s)->count)
 #define String_first(s) (kob_da_first(s))
@@ -259,6 +273,7 @@ typedef struct kob_str {
   const size_t len;
 } kob_str;
 
+kob_str str_slice(const kob_str s, int begin, int end);
 #define str_isvalid(s) (s.ptr != NULL)
 #define str_len(s) (s.len)
 #define str_valid_index(s, idx) (s.ptr != NULL && idx < s.len)
@@ -347,33 +362,119 @@ KOBDEF kob_str str_slice(const kob_str s, int begin, int end) {
   return String_slice(str_obj, shifted_begin, shifted_end);
 }
 
-/*
-KOBDEF uint8_t str_valid_index(const kob_str s, size_t idx) {
-   return (s.ptr != NULL && idx < s.len);
-}
- KOBDEF char str_at(const kob_str s, size_t idx) {
-   if (!str_valid_index(s, idx)) {
-     return '\0';
-   } else {
-     char c = (*(s.ptr))[idx];
-     return c;
-   }
-} ``
-*/
-
 #ifdef KOB_HEAP
+
+static uint8_t KOB_HEAP_ARRAY[KOB_HEAP_SIZE];
+static uint8_t *const KOB_HEAP_BASE_PTR = KOB_HEAP_ARRAY;
+static uint8_t *KOB_HEAP_CURR_PTR = KOB_HEAP_ARRAY;
+static uint32_t KOB_HEAP_ID_COUNTER = 0;
+
 void kob_free_HEAP(void *ptr) {}
-void *kob_malloc_HEAP(size_t size) { return NULL; }
-void *kob_calloc_HEAP(size_t n, size_t size) { return NULL; }
-void *kob_realloc_HEAP(void *ptr, size_t size) { return NULL; }
+
+void *kob_malloc_HEAP(size_t size) {
+  if (KOB_HEAP_BASE_PTR + size >= KOB_HEAP_BASE_PTR + KOB_HEAP_SIZE) {
+    return NULL;
+  }
+  kob_HeapChunkHeader *chunk_header = (kob_HeapChunkHeader *)KOB_HEAP_CURR_PTR;
+  kob_HeapChunkHeader new_header;
+  new_header.id = KOB_HEAP_ID_COUNTER;
+  new_header.size = size;
+  (*chunk_header) = new_header;
+
+  void *ret_ptr = KOB_HEAP_CURR_PTR + sizeof(kob_HeapChunkHeader);
+  const uint8_t *const next_not_aligned = KOB_HEAP_CURR_PTR + size;
+  while (KOB_HEAP_CURR_PTR < next_not_aligned) {
+    KOB_HEAP_CURR_PTR += KOB_HEAP_CHUNK_SIZE;
+    KOB_HEAP_ID_COUNTER += KOB_HEAP_CHUNK_SIZE;
+  }
+  return ret_ptr;
+}
+
+void *kob_calloc_HEAP(size_t n, size_t size) {
+  void *ptr = kob_malloc_HEAP(size);
+  if (ptr != NULL) {
+    kob_memset(ptr, n, size);
+  }
+  return ptr;
+}
+
+void *kob_realloc_HEAP(void *ptr, size_t size) { return kob_malloc(size); }
 
 const kob_HeapChunkHeader *
-kob_next_heap_header(const kob_HeapChunkHeader *header) {}
+kob_next_heap_header(const kob_HeapChunkHeader *header) {
 
-void print_chunk(const kob_HeapChunkHeader *header) {}
-void print_heap() {}
-void print_heap_in_chunks() {}
-void print_addr(uint) {}
+  kob_HeapChunk *chunk = (kob_HeapChunk *)header;
+  const uint8_t *const next_not_aligned =
+      ((uint8_t *)chunk) + sizeof(kob_HeapChunkHeader) + header->size;
+
+  while ((uint8_t *)chunk < next_not_aligned) {
+    chunk += 1;
+  }
+
+  return (kob_HeapChunkHeader *)chunk;
+}
+
+#define KOB_HEAP_PRINT_4BYTES(_print_bytes)                                    \
+  {                                                                            \
+    printf("%02x%02x %02x%02x - %c%c%c%c\n", *((_print_bytes)),                \
+           *((_print_bytes) + 1), *((_print_bytes) + 2),                       \
+           *((_print_bytes) + 3), *((_print_bytes)), *((_print_bytes) + 1),    \
+           *((_print_bytes) + 2), *((_print_bytes) + 3));                      \
+  }
+
+void kob_print_chunk(const kob_HeapChunkHeader *header) {
+  printf("Chunk #%u[%u]\n", header->id, header->size);
+
+  const uint8_t *const bytes = (uint8_t *)(header);
+  printf(" CHUNK_ID - ");
+  KOB_HEAP_PRINT_4BYTES(bytes);
+  printf(" CHUNK_SZ - ");
+  KOB_HEAP_PRINT_4BYTES(bytes + 4);
+
+  uint32_t i = 8;
+  while (i + 4 <= header->size) {
+    printf(" %08X - ", header->id + i);
+    KOB_HEAP_PRINT_4BYTES(bytes + i);
+    i += 4;
+  }
+
+  printf("\n");
+}
+
+void kob_print_heap() {
+  uint32_t heap_size = KOB_HEAP_CURR_PTR - KOB_HEAP_BASE_PTR;
+  uint32_t i = 0;
+
+  printf(" --- KOB_HEAP: Start ---\n");
+  while (i <= heap_size) {
+    printf(" %08X - ", i);
+    uint8_t *bytes = KOB_HEAP_ARRAY + i;
+    KOB_HEAP_PRINT_4BYTES(bytes);
+    i += 4;
+  }
+
+  printf(" --- KOB_HEAP: End ---\n");
+  printf("\n\t---- Stats ---- \n\tTOTAL_ALLOCAED_HEAP_SIZE = %ld (bytes)\n\t "
+         "USED_HEAP_SIZE = %d "
+         "(bytes)\n\n",
+         KOB_HEAP_SIZE, heap_size);
+}
+
+void kob_print_heap_in_chunks() {
+  const kob_HeapChunkHeader *header = (kob_HeapChunkHeader *)KOB_HEAP_BASE_PTR;
+  do {
+    kob_print_chunk(header);
+    header = kob_next_heap_header(header);
+  } while (header->id != 0);
+}
+
+void kob_print_addr(uint32_t addr) {
+  if (addr < KOB_HEAP_SIZE) {
+    printf(" Bytes at %08X - ", addr);
+    uint8_t *bytes = KOB_HEAP_BASE_PTR + addr;
+    KOB_HEAP_PRINT_4BYTES(bytes);
+  }
+}
 #endif /* KOB_HEAP */
 
 #endif /* KOB_IMPL */
