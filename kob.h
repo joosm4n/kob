@@ -14,9 +14,11 @@
 /* ----- */
 /* Don't commit, just so I can see the IMPL PART when testing */
 /*                                                                             \
- */                                                                            \
+ */
+
+/*                                                            \
 #define KOB_IMPL
-#define KOB_HEAP /*                                                            \
+#define KOB_HEAP
  #define KOB_TYPEDEFS                                                          \
  #define KOB_NO_STD                                                            \
  #undef __cplusplus                                                            \
@@ -258,19 +260,23 @@ typedef struct kob_String {
 } kob_String;
 
 kob_String String_from(const char *c_str);
+kob_String String_with_size(size_t size);
 void String_destroy(kob_String *s);
 void String_push(kob_String *s, char c);
 kob_str String_slice(const kob_String *s, int begin, int end);
+kob_str String_as_str(const kob_String *s);
 void String_push_str(kob_String *s, const char *c_str);
+const char *String_cstr(const kob_String *s);
+
 #define String_isvalid(s) ((s) != NULL ? (s)->items != NULL : 0)
 #define String_len(s) ((s)->count)
 #define String_first(s) (kob_da_first(s))
 #define String_last(s) (kob_da_last(s))
 
 typedef struct kob_str {
-  const char *const *const ptr;
-  const size_t start;
-  const size_t len;
+  const char **ptr;
+  size_t start;
+  size_t len;
 } kob_str;
 
 kob_str str_slice(const kob_str s, int begin, int end);
@@ -311,6 +317,13 @@ KOBDEF kob_String String_from(const char *c_str) {
   return s;
 }
 
+kob_String String_with_size(size_t size) {
+  kob_String s = {};
+  kob_String *s_ref = &s;
+  kob_da_resize(s_ref, size);
+  return s;
+}
+
 KOBDEF void String_destroy(kob_String *s) {
   kob_free(s->items);
   s->items = NULL;
@@ -325,6 +338,8 @@ KOBDEF void String_push_str(kob_String *s, const char *c_str) {
   kob_da_push_many(s, c_str, len);
 }
 
+const char *String_cstr(const kob_String *s) { return s->items; }
+
 KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
   if (!String_isvalid(s)) {
     kob_str err1 = {0, 0, 0};
@@ -332,7 +347,7 @@ KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
   }
 
   size_t len = String_len(s);
-  const char *const *const target_ptr = (const char *const *const)&(s->items);
+  const char **target_ptr = (const char **)&(s->items);
 
   if (begin >= (int)len) {
     kob_str err2 = {target_ptr, 0, 0};
@@ -350,6 +365,34 @@ KOBDEF kob_str String_slice(const kob_String *s, int begin, int end) {
 
   kob_str last = {target_ptr, (size_t)begin, (size_t)end - (size_t)begin};
   return last;
+}
+
+kob_str String_as_str(const kob_String *s) {
+  const char **ptr = (const char **)&(s->items);
+  kob_str str = {ptr, 0, s->count};
+  return str;
+}
+
+size_t String_split_on(const kob_String *src, kob_str dst_array[],
+                       const char split, const size_t max_segments) {
+  size_t line = 0;
+  size_t idx = 0;
+  size_t src_len = src->count;
+  size_t begin_idx = 0;
+  while (line < max_segments && idx < src_len) {
+    begin_idx = idx;
+
+    while (idx < src_len && src->items[idx] != split) {
+      idx++;
+    }
+
+    dst_array[line++] = (kob_str){.ptr = (const char **)&(src->items),
+                                  .start = begin_idx,
+                                  .len = idx - begin_idx};
+    if (idx < src->count)
+      idx++;
+  }
+  return line;
 }
 
 /* */
@@ -414,12 +457,38 @@ kob_next_heap_header(const kob_HeapChunkHeader *header) {
   return (kob_HeapChunkHeader *)chunk;
 }
 
+static const char *ascii_table[128] = {
+    "\\0",   "\\x01", "\\x02", "\\x03", "\\x04", "\\x05", "\\x06",
+    "\\a",   "\\b",   "\\t",   "\\n",   "\\v",   "\\f",   "\\r",
+    "\\x0E", "\\x0F", "\\x10", "\\x11", "\\x12", "\\x13", "\\x14",
+    "\\x15", "\\x16", "\\x17", "\\x18", "\\x19", "\\x1A", "\\x1B",
+    "\\x1C", "\\x1D", "\\x1E", "\\x1F", " ",     "!",     "\"",
+    " # ",   "$",     "%",     "&",     "'",     "(",     ")",
+    "*",     "+",     ",",     "-",     ".",     "/",     "0",
+    "1",     "2",     "3",     "4",     "5",     "6",     "7",
+    "8",     "9",     ":",     ";",     "<",     "=",     ">",
+    "?",     "@",     "A",     "B",     "C",     "D",     "E",
+    "F",     "G",     "H",     "I",     "J",     "K",     "L",
+    "M",     "N",     "O",     "P",     "Q",     "R",     "S",
+    "T",     "U",     "V",     "W",     "X",     "Y",     "Z",
+    "[",     "\\",    "]",     "^",     "_",     "`",     "a",
+    "b",     "c",     "d",     "e",     "f",     "g",     "h",
+    "i",     "j",     "k",     "l",     "m",     "n",     "o",
+    "p",     "q",     "r",     "s",     "t",     "u",     "v",
+    "w",     "x",     "y",     "z",     "{",     "|",     "}",
+    "~",     "\\x7F" /* DEL */
+};
+
+#define BYTE_TO_ASCII(b) (b < 127 ? ascii_table[(b)] : "\\0")
+
 #define KOB_HEAP_PRINT_4BYTES(_print_bytes)                                    \
   {                                                                            \
-    printf("%02x%02x %02x%02x - %c%c%c%c\n", *((_print_bytes)),                \
+    printf("%02x%02x %02x%02x - %s%s%s%s\n", *(_print_bytes),                  \
            *((_print_bytes) + 1), *((_print_bytes) + 2),                       \
-           *((_print_bytes) + 3), *((_print_bytes)), *((_print_bytes) + 1),    \
-           *((_print_bytes) + 2), *((_print_bytes) + 3));                      \
+           *((_print_bytes) + 3), BYTE_TO_ASCII(*(_print_bytes)),              \
+           BYTE_TO_ASCII(*(_print_bytes + 1)),                                 \
+           BYTE_TO_ASCII(*(_print_bytes + 2)),                                 \
+           BYTE_TO_ASCII(*(_print_bytes + 3)));                                \
   }
 
 void kob_print_chunk(const kob_HeapChunkHeader *header) {
@@ -476,6 +545,8 @@ void kob_print_addr(uint32_t addr) {
   }
 }
 #endif /* KOB_HEAP */
+
+#undef BYTE_TO_ASCII
 
 #endif /* KOB_IMPL */
 
